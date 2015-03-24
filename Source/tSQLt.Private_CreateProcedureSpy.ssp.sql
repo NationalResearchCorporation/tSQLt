@@ -1,7 +1,7 @@
 IF OBJECT_ID('tSQLt.Private_CreateProcedureSpy') IS NOT NULL DROP PROCEDURE tSQLt.Private_CreateProcedureSpy;
 GO
 ---Build+
-CREATE PROCEDURE tSQLt.Private_CreateProcedureSpy
+CREATE PROCEDURE [tSQLt].[Private_CreateProcedureSpy]
     @ProcedureObjectId INT,
     @OriginalProcedureName NVARCHAR(MAX),
     @LogTableName NVARCHAR(MAX),
@@ -20,9 +20,7 @@ BEGIN
             @TypeName sysname,
             @IsOutput BIT,
             @IsCursorRef BIT;
-            
-
-      
+           
     SELECT @Seperator = '', @ProcParmTypeListSeparater = '', 
            @ProcParmList = '', @TableColList = '', @ProcParmTypeList = '', @TableColTypeList = '';
       
@@ -39,18 +37,38 @@ BEGIN
     BEGIN
         IF @IsCursorRef = 0
         BEGIN
-            SELECT @ProcParmList = @ProcParmList + @Seperator + @ParamName, 
-                   @TableColList = @TableColList + @Seperator + '[' + STUFF(@ParamName,1,1,'') + ']', 
-                   @ProcParmTypeList = @ProcParmTypeList + @ProcParmTypeListSeparater + @ParamName + ' ' + @TypeName + ' = NULL ' + 
-                                       CASE WHEN @IsOutput = 1 THEN ' OUT' 
-                                            ELSE '' 
-                                       END, 
+         DECLARE @ParmIsTableType BIT = 0;
+         IF (@ParamName IN (SELECT DISTINCT p.NAME
+                        FROM sys.parameters p
+                        JOIN sys.types t ON   p.system_type_id = t.system_type_id
+                        WHERE t.is_table_type = 1))
+         BEGIN
+            SET @ParmIsTableType = 1
+         END
+
+         IF @ParmIsTableType = 1
+             BEGIN
+                SELECT @ProcParmList = @ProcParmList + @Seperator + '(SELECT * FROM ' + @ParamName + ' FOR XML AUTO)', 
+                       @ProcParmTypeList = @ProcParmTypeList + @ProcParmTypeListSeparater + @ParamName + ' ' + @TypeName + 
+                                           CASE WHEN @IsOutput = 1 THEN ' OUT' 
+                                                ELSE '' 
+                                           END + ' READONLY'
+             END
+         ELSE
+             BEGIN
+                SELECT @ProcParmList = @ProcParmList + @Seperator + @ParamName, 
+                       @ProcParmTypeList = @ProcParmTypeList + @ProcParmTypeListSeparater + @ParamName + ' ' + @TypeName + ' = NULL ' + 
+                                           CASE WHEN @IsOutput = 1 THEN ' OUT' 
+                                                ELSE '' 
+                                           END
+             END
+
+            SELECT @TableColList = @TableColList + @Seperator + '[' + STUFF(@ParamName,1,1,'') + ']', 
                    @TableColTypeList = @TableColTypeList + ',[' + STUFF(@ParamName,1,1,'') + '] ' + 
                           CASE WHEN @TypeName LIKE '%nchar%'
-                                 OR @TypeName LIKE '%nvarchar%'
-                               THEN 'nvarchar(MAX)'
-                               WHEN @TypeName LIKE '%char%'
-                               THEN 'varchar(MAX)'
+                                 OR @TypeName LIKE '%nvarchar%' THEN 'nvarchar(MAX)'
+                               WHEN @TypeName LIKE '%char%' THEN 'varchar(MAX)'
+                               WHEN @ParmIsTableType = 1 THEN 'XML'
                                ELSE @TypeName
                           END + ' NULL';
 

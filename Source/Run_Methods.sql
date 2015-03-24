@@ -71,7 +71,6 @@ BEGIN
 
 
     BEGIN TRAN;
-    SAVE TRAN @TranName;
 
     SET @PreExecTrancount = @@TRANCOUNT;
     
@@ -220,9 +219,7 @@ BEGIN
                'Error', 
                'TestResult entry is missing; Original outcome: ' + @Result + ', ' + @Msg;
     END    
-      
 
-    COMMIT;
 END;
 GO
 

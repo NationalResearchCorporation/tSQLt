@@ -1,6 +1,6 @@
 IF OBJECT_ID('tSQLt.Private_CreateFakeFunction') IS NOT NULL DROP PROCEDURE tSQLt.Private_CreateFakeFunction;
 GO
-CREATE PROCEDURE tSQLt.Private_CreateFakeFunction
+CREATE PROCEDURE [tSQLt].[Private_CreateFakeFunction]
   @FunctionName NVARCHAR(MAX),
   @FakeFunctionName NVARCHAR(MAX),
   @FunctionObjectId INT,
@@ -17,7 +17,14 @@ BEGIN
      
   DECLARE @ParameterList NVARCHAR(MAX);
   SELECT @ParameterList = COALESCE(
-     STUFF((SELECT ','+P.name+' '+TypeName
+     STUFF((SELECT ','+P.name+' '+TypeName+ CASE WHEN P.Name IN
+                                                    (SELECT DISTINCT p1.NAME
+                                                     FROM sys.parameters p1
+                                                     JOIN sys.types t1 ON   p1.system_type_id = t1.system_type_id
+                                                     WHERE t1.is_table_type = 1)
+                                                 THEN ' READONLY'
+                                                 ELSE ''
+                                            END
               FROM sys.parameters AS P
              CROSS APPLY tSQLt.Private_GetFullTypeName(P.user_type_id,P.max_length,P.precision,P.scale,NULL) AS T
              WHERE P.object_id = @FunctionObjectId
@@ -40,11 +47,12 @@ BEGIN
 
   IF(@IsScalarFunction = 1)
   BEGIN
-    EXEC('CREATE FUNCTION '+@FunctionName+'('+@ParameterList+') RETURNS '+@ReturnType+' AS BEGIN RETURN '+@FakeFunctionName+'('+@ParameterCallList+');END;');	
+    EXEC('CREATE FUNCTION '+@FunctionName+'('+@ParameterList+') RETURNS '+@ReturnType+' AS BEGIN RETURN '+@FakeFunctionName+'('+@ParameterCallList+');END;'); 
   END
   ELSE
   BEGIN
-    EXEC('CREATE FUNCTION '+@FunctionName+'('+@ParameterList+') RETURNS TABLE AS RETURN SELECT * FROM '+@FakeFunctionName+'('+@ParameterCallList+');');	
+    EXEC('CREATE FUNCTION '+@FunctionName+'('+@ParameterList+') RETURNS TABLE AS RETURN SELECT * FROM '+@FakeFunctionName+'('+@ParameterCallList+');'); 
   END;
 END;
+
 GO
